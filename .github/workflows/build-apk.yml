@@ -32,11 +32,11 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Extract project ZIP
+      - name: Extract version 3 project
         run: |
-          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
-          if [ -z "$ZIP_FILE" ]; then
-            echo "Project ZIP file not found"
+          ZIP_FILE="coptic_calendar_v3_agricultural_phone_ready.zip"
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "Version 3 ZIP file not found"
             exit 1
           fi
           unzip -o "$ZIP_FILE" -d .
@@ -53,7 +53,7 @@ jobs:
 
           image_path = Path("app_icon.png")
           if not image_path.exists():
-              raise FileNotFoundError("app_icon.png not found in repository root")
+              raise FileNotFoundError("app_icon.png not found")
 
           res = Path("coptic_calendar_app/app/src/main/res")
           manifest = Path("coptic_calendar_app/app/src/main/AndroidManifest.xml")
@@ -103,6 +103,12 @@ jobs:
           print("New app icon applied successfully")
           PY
 
+      - name: Verify project
+        run: |
+          test -f coptic_calendar_app/app/build.gradle
+          test -f coptic_calendar_app/app/src/main/assets/index.html
+          echo "Project files verified"
+
       - name: Build APK
         working-directory: coptic_calendar_app
         run: gradle --no-daemon assembleDebug
@@ -110,5 +116,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: coptic-calendar-debug-apk
+          name: coptic-calendar-v3-agricultural-debug-apk
           path: coptic_calendar_app/app/build/outputs/apk/debug/app-debug.apk
