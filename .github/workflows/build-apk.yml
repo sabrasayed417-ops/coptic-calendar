@@ -12,8 +12,31 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Get project files
+      - name: Get repository files
         uses: actions/checkout@v5
+
+      - name: Find and extract project ZIP
+        shell: bash
+        run: |
+          ZIP_FILE="$(find . -maxdepth 1 -type f -name '*.zip' -print -quit)"
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: No project ZIP file found in repository root."
+            exit 1
+          fi
+
+          echo "Found project: $ZIP_FILE"
+
+          mkdir -p "$RUNNER_TEMP/unpacked"
+          unzip -q "$ZIP_FILE" -d "$RUNNER_TEMP/unpacked"
+
+          if [ ! -f "$RUNNER_TEMP/unpacked/coptic_calendar_app/settings.gradle" ]; then
+            echo "ERROR: Project folder was not found inside ZIP."
+            exit 1
+          fi
+
+          rm -rf coptic_calendar_app
+          cp -a "$RUNNER_TEMP/unpacked/coptic_calendar_app" ./coptic_calendar_app
 
       - name: Install Java 17
         uses: actions/setup-java@v6
@@ -24,97 +47,21 @@ jobs:
       - name: Install Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Install Android tools
+      - name: Install Android platform and build tools
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Install Gradle
+      - name: Install Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
-      - name: Extract version 4 project
-        run: |
-          ZIP_FILE="coptic_calendar_v4_agricultural_phone_ready.zip"
-          if [ ! -f "$ZIP_FILE" ]; then
-            echo "Version 4 ZIP file not found"
-            exit 1
-          fi
-          unzip -o "$ZIP_FILE" -d .
-
-      - name: Install Pillow
-        run: python -m pip install Pillow
-
-      - name: Apply app icon
-        run: |
-          python - <<'PY'
-          from PIL import Image
-          from pathlib import Path
-          import xml.etree.ElementTree as ET
-
-          image_path = Path("app_icon.png")
-          if not image_path.exists():
-              raise FileNotFoundError("app_icon.png not found")
-
-          res = Path("coptic_calendar_app/app/src/main/res")
-          manifest = Path("coptic_calendar_app/app/src/main/AndroidManifest.xml")
-
-          if not manifest.exists():
-              raise FileNotFoundError("AndroidManifest.xml not found")
-
-          img = Image.open(image_path).convert("RGBA")
-          side = min(img.size)
-          left = (img.width - side) // 2
-          top = (img.height - side) // 2
-          img = img.crop((left, top, left + side, top + side))
-
-          sizes = {
-              "mipmap-mdpi": 48,
-              "mipmap-hdpi": 72,
-              "mipmap-xhdpi": 96,
-              "mipmap-xxhdpi": 144,
-              "mipmap-xxxhdpi": 192,
-          }
-
-          for folder, size in sizes.items():
-              target = res / folder
-              target.mkdir(parents=True, exist_ok=True)
-              icon = img.resize((size, size), Image.Resampling.LANCZOS)
-              icon.save(target / "ic_launcher.png")
-              icon.save(target / "ic_launcher_round.png")
-
-          adaptive = res / "mipmap-anydpi-v26"
-          if adaptive.exists():
-              for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
-                  file = adaptive / name
-                  if file.exists():
-                      file.unlink()
-
-          android = "{http://schemas.android.com/apk/res/android}"
-          tree = ET.parse(manifest)
-          app = tree.getroot().find("application")
-
-          if app is None:
-              raise RuntimeError("Application element not found")
-
-          app.set(android + "icon", "@mipmap/ic_launcher")
-          app.set(android + "roundIcon", "@mipmap/ic_launcher_round")
-
-          tree.write(manifest, encoding="utf-8", xml_declaration=True)
-          print("New app icon applied successfully")
-          PY
-
-      - name: Verify project
-        run: |
-          test -f coptic_calendar_app/app/build.gradle
-          test -f coptic_calendar_app/app/src/main/assets/index.html
-          echo "Project files verified"
-
-      - name: Build APK
+      - name: Build debug APK
         working-directory: coptic_calendar_app
         run: gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: coptic-calendar-v4-agricultural-debug-apk
+          name: coptic-calendar-approved-design-debug-apk
           path: coptic_calendar_app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
